@@ -315,7 +315,7 @@ class AIPlayer(Player):
             newNode["value"] = 0 # this is updated in bfs
             newNode["parent"] = node
             newNode["depth"] = node["depth"]+1
-            if move is Move(END, None, None):
+            if move.moveType == END:
                 newNode["minmax"] = -1 * node["minmax"]
             else:
                 newNode["minmax"] = node["minmax"]
@@ -329,24 +329,27 @@ class AIPlayer(Player):
     # each and returns that average value
     #
     def evalListNodes(self, nodes):
-        nodesLength = len(nodes)
-        i = 0
-        j = 0
-        m = 0
-        for node in nodes:
-            if node["minmax"] == 1:
-                i = i +1
-            elif node["minmax"] == -1:
-                j = j + 1
-        if nodesLength != i or nodesLength != j:
-                print("interesting", nodesLength, i, j, m)
-        sum = 0
-        total = 0
-        for node in nodes:
-            if node["value"] != -1:
-                sum += node["value"]
-                total += 1
-        return sum / max(total, 1)
+        if nodes and len(nodes) > 1:
+            noEndNodes = []
+            for node in nodes:
+                if node["move"].moveType is not END:
+                    noEndNodes.append(node)
+            randomNode = noEndNodes[0]
+            if randomNode["minmax"] == 1:
+                bestNodeValue = -1
+                for node in noEndNodes:
+                    if node["value"] >= bestNodeValue:
+                        bestNodeValue = node["value"]
+            elif randomNode["minmax"] == -1:
+                bestNodeValue = 1
+                for node in noEndNodes:
+                    if node["value"] <= bestNodeValue:
+                        bestNodeValue = node["value"]
+            return bestNodeValue
+        elif nodes:
+            return nodes[0]["value"]
+        else:
+            return -1
 
 
     ##
