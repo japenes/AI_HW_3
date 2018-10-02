@@ -101,7 +101,7 @@ class AIPlayer(Player):
     #Return: The Move to be made
     ##
     def getMove(self, currentState):
-        root = {"move":None, "state":currentState, "value":0, "parent":None, "depth":0}
+        root = {"move":None, "state":currentState, "value":0, "parent":None, "depth":0, "minmax":1}
         move = self.bfs(root, 0)
         return move
 
@@ -311,10 +311,14 @@ class AIPlayer(Player):
         states = []
         for move in moves:
             newNode = {"move":move}
-            newNode["state"] = getNextState(node["state"], newNode["move"])
+            newNode["state"] = getNextStateAdversarial(node["state"], newNode["move"])
             newNode["value"] = 0 # this is updated in bfs
             newNode["parent"] = node
             newNode["depth"] = node["depth"]+1
+            if move is Move(END, None, None):
+                newNode["minmax"] = -1 * node["minmax"]
+            else:
+                newNode["minmax"] = node["minmax"]
             states.append(newNode)
         return states
 
@@ -325,6 +329,17 @@ class AIPlayer(Player):
     # each and returns that average value
     #
     def evalListNodes(self, nodes):
+        nodesLength = len(nodes)
+        i = 0
+        j = 0
+        m = 0
+        for node in nodes:
+            if node["minmax"] == 1:
+                i = i +1
+            elif node["minmax"] == -1:
+                j = j + 1
+        if nodesLength != i or nodesLength != j:
+                print("interesting", nodesLength, i, j, m)
         sum = 0
         total = 0
         for node in nodes:
@@ -350,13 +365,13 @@ class AIPlayer(Player):
         if depth+1 < self.depth_limit:
             #if the next set of nodes are inside the depth limit, do bfs()
             for n in newNodes:
-                n["value"] = self.evaluateState(n["state"])
-                if n["value"] != -1.0:
-                    n["value"] = (0.6*self.evaluateState(n["state"]))+(0.4*self.bfs(n, depth+1))
+                n["value"] = self.evaluateState(n["state"]) * n["minmax"]
+                if n["value"] != -1.0 and n["value"] != 1.0:
+                    n["value"] = self.bfs(n, depth+1)
         else:
             #else find the values of each node
             for n in newNodes:
-                n["value"] = self.evaluateState(n["state"])
+                n["value"] = self.evaluateState(n["state"]) * n["minmax"]
         evaluation = self.evalListNodes(newNodes)
         if depth > 0:
             return evaluation
@@ -416,7 +431,7 @@ if ai.evaluateState(attackState) < ai.evaluateState(buildState):
 
 # BFS TESTS
 # (1) Does reaching depth limit return an integer?
-testNode = {"move":None, "state":testState, "value":0, "parent":None, "depth":3}
+testNode = {"move":None, "state":testState, "value":0, "parent":None, "depth":3, "minmax":1}
 if not isinstance(ai.bfs(testNode, testNode["depth"]), float):
     print("ERROR: bfs() doesn't test depth limit properly")
 
@@ -429,6 +444,6 @@ except:
 
 # EXPAND NODE TESTS
 # (1) Does expanding a node return more nodes?
-testNode = {"move":None, "state":testState, "value":0, "parent":None, "depth":0}
+testNode = {"move":None, "state":testState, "value":0, "parent":None, "depth":0, "minmax":1}
 if len(ai.expandNode(testNode)) == 0:
     print("ERROR: expandNode returns empty list")
