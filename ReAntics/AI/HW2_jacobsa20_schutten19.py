@@ -107,7 +107,7 @@ class AIPlayer(Player):
         # If the AI wins the value should be 1, otherwise it should be -1
         if getWinner(currentState) == 1:
             return 1
-        elif getWinner(currenttState) == 0:
+        elif getWinner(currentState) == 0:
             return -1
         return value
 
@@ -150,10 +150,18 @@ class AIPlayer(Player):
                 bestNode = max(nodeList, key=lambda x:x['evaluation_of_state'])
                 return bestNode['move_from_parent_node']
             else:
-                return(Move(END, None, None)) 
+                return(Move(END, None, None))
 
 
-    # This method returns a move to play
+    ##
+    # getMove
+    # Description: Gets the next move from the Player.
+    #
+    # Parameters:
+    #   currentState - The state of the current game waiting for the player's move (GameState)
+    #
+    # Return: The Move to be made
+    ##
     def getMove(self, currentState):
         valueBefore = self.getValue(currentState)
         move = self.getBestMove(currentState.fastclone(), 0)
@@ -219,17 +227,7 @@ class AIPlayer(Player):
             return moves
         else:
             return [(0, 0)]
-    
-    ##
-    #getMove
-    #Description: Gets the next move from the Player.
-    #
-    #Parameters:
-    #   currentState - The state of the current game waiting for the player's move (GameState)
-    #
-    #Return: The Move to be made
-    ##
-   
+
     
     ##
     #getAttack
