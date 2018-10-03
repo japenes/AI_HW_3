@@ -8,7 +8,7 @@ from Ant import UNIT_STATS
 from Move import Move
 from GameState import *
 from AIPlayerUtils import *
-
+from random import shuffle
 
 ##
 #AIPlayer
@@ -31,11 +31,7 @@ class AIPlayer(Player):
     def __init__(self, inputPlayerId):
         super(AIPlayer,self).__init__(inputPlayerId, "ExquisiteHeuristic")
         self.depth_limit = 2
-        self.anthillCoords = None
-        self.tunnelCoords = None
-        self.myFoodCoords = None
-        self.maxTunnelDist = 0
-        self.maxFoodDist = 0
+        self.me = 0
 
     ##
     #getPlacement
@@ -101,6 +97,7 @@ class AIPlayer(Player):
     #Return: The Move to be made
     ##
     def getMove(self, currentState):
+        self.me = currentState.whoseTurn
         root = {"move":None, "state":currentState, "value":0, "parent":None, "depth":0, "minmax":1}
         move = self.bfs(root, 0)
         return move
@@ -125,13 +122,6 @@ class AIPlayer(Player):
     # however we need to reset global variables
     #
     def registerWin(self, hasWon):
-        #reset global variables
-        self.depth_limit = 2
-        self.anthillCoords = None
-        self.tunnelCoords = None
-        self.myFoodCoords = None
-        self.maxTunnelDist = 0
-        self.maxFoodDist = 0
         pass
 
     ##
@@ -139,166 +129,71 @@ class AIPlayer(Player):
     #
     # This agent evaluates the state and returns a double between -1.0 and 1.0
     #
-    def evaluateState(self, gs):
-        myInv = getCurrPlayerInventory(gs)
-        theirInv = getEnemyInv(self, gs)
-        me = gs.whoseTurn
-        myQueen = getAntList(gs, me, (QUEEN,))[0]
-        enemyAntsThreat = getAntList(gs, 1-me, (DRONE, R_SOLDIER))
-        myWorkers = getAntList(gs, me, (WORKER,))
-        myAnts = getAntList(gs, me, (WORKER,QUEEN,WORKER,DRONE,SOLDIER,R_SOLDIER))
-        if len(getAntList(gs, 1 - me, (QUEEN,))) == 0:
-            return 1
-        enemyQueen = getAntList(gs, 1 - me, (QUEEN,))[0]
-        enemyWorkers = getAntList(gs, 1 - me, (WORKER,))
-
-        ###################################
-        #### INIT ######################
-        ###################################
-
-        for ant in enemyAntsThreat:
-            if ant.coords[1] > 3:
-                enemyAntsThreat.remove(ant)
-
-        #do this once
-        if self.maxTunnelDist == 0:
-            self.tunnelCoords = getConstrList(gs, me, (TUNNEL,))[0].coords
-            self.anthillCoords = getConstrList(gs, me, (ANTHILL,))[0].coords
-            foods = getConstrList(gs, None, (FOOD,))
-            #find the food closest to the tunnel
-            bestDistSoFar = 1000 #i.e., infinity
-            for food in foods:
-                dist = stepsToReach(gs, self.tunnelCoords, food.coords)
-                if (dist < bestDistSoFar):
-                    self.myFoodCoords = food.coords
-                    bestDistSoFar = dist
-
-            for i in range(0,10):
-                for j in range(0,10):
-                    tunnelDist = approxDist((i,j), self.tunnelCoords)
-                    foodDist = approxDist((i,j), self.myFoodCoords)
-                    if (tunnelDist > self.maxTunnelDist):
-                        self.maxTunnelDist = tunnelDist
-                    if (foodDist > self.maxFoodDist):
-                        self.maxFoodDist = foodDist
-
-        ###################################
-        #### RETURN BAD ######################
-        ###################################
-
-        #if we have more than two workers, throw out this option
-        if len(myWorkers) > 2:
-            return -1.0
-
-        if len(getAntList(gs, me, (R_SOLDIER,))) > 0:
+    def evaluateState(self, currentState):
+        me = self.me
+        # Get the different inventories
+        myInventory = currentState.inventories[me]
+        enemyInventory = currentState.inventories[1-me]
+        neutralInventory = currentState.inventories[2]
+        ourAnts = getAntList(currentState, me, types = (QUEEN, WORKER, DRONE, SOLDIER, R_SOLDIER))
+        if len(ourAnts) == 4:
             return -1
-
-        #remove nodes where an ant is sitting idle on the hill
-        if myQueen.coords == self.anthillCoords:
-            return -1.0
-
-
-
-
-        ###################################
-        #### ATTACK ######################
-        ###################################
-        myAttackers = getAntList(gs, me, (SOLDIER, DRONE, R_SOLDIER))
-        if len(myAttackers) > 0:
-            attackScore = 0
-            maxAttackScore = 0
-            for ant in myAttackers:
-                if len(enemyWorkers) > 0:
-                    attackScore += 20 - approxDist(ant.coords, enemyWorkers[0].coords)
-                else:
-                    attackScore += 20 - approxDist(ant.coords, enemyQueen.coords)
-                maxAttackScore += 19
-            attackScore = (maxAttackScore - abs(maxAttackScore - attackScore)) / maxAttackScore
+        workers = getAntList(currentState, me, types = (WORKER, WORKER))
+        if len(workers) == 1:
+            worker = 1
         else:
-            attackScore = 0
-
-
-
-
-        ###################################
-        #### ANT NUM ######################
-        ###################################
-
-        #calculate ant score
-        myAntScore = 0
-        for ant in myAnts:
-            if ant.type == WORKER:
-                myAntScore += 1
-            elif ant.type == SOLDIER:
-                myAntScore += 4
-            elif ant.type == DRONE:
-                myAntScore += 2
-            elif ant.type == R_SOLDIER:
-                myAntScore += 3
-
-        theirAnts = theirInv.ants
-        theirAntScore = 0
-        for ant in theirAnts:
-            if ant.type == WORKER:
-                theirAntScore += 1
-            elif ant.type == SOLDIER:
-                theirAntScore += 4
-            elif ant.type == DRONE:
-                theirAntScore += 2
-            elif ant.type == R_SOLDIER:
-                theirAntScore += 3
-        antDiff = (myAntScore - theirAntScore) / max(myAntScore, theirAntScore)
-
-
-
-
-        ###################################
-        #### FOOD DIST ######################
-        ###################################
-        myCarryScore = 0
-        depositScore = 0
-        # Non carrying workers are close to food and carrying workers are close to tunnel
-        collectScore = 0
-        for worker in myWorkers:
-            if worker.carrying:
-                myCarryScore += 1
-                depositScore += 1 - (approxDist(worker.coords, self.tunnelCoords) / self.maxTunnelDist)
-            else:
-                collectScore += 1 - (approxDist(worker.coords, self.myFoodCoords) / self.maxFoodDist)
-
-        foodDistScore = (depositScore + collectScore) / 2
-
-
-
-        ###################################
-        #### FOOD SCORE ######################
-        ###################################
-        # D. How much food each player has
-        myfoodScore = (myInv.foodCount) / 11
-
-
-
-
-        ###################################
-        #### CARRY ######################
-        ###################################
-        # E. How much food the worker ants are carrying
-        if len(myWorkers) != 0:
-            myCarryScore = myCarryScore / len(myWorkers)
-        else:
-            myCarryScore = 0
-
-
-
-
-        ##############################
-        ###### FINAL RETURN ##########
-        ##############################
-
-
-        output = (20*myfoodScore + 20*antDiff + myCarryScore + foodDistScore + 10*attackScore) / 53
-
-        return output
+            worker = 0
+        #worker = min(len(workers), 1) # One or zero, we only want one worker
+        rSoldiers = getAntList(currentState, me, types = (R_SOLDIER,R_SOLDIER))
+        rSoldier = min(len(rSoldiers), 1) # One or zero, we only want one ranged soldier
+        # If we have an r soldier make sure it attacks a worker or goes to the opponent's anthill
+        rSoldierDistance = 20
+        if rSoldier:
+            enemyWorkers = getAntList(currentState, 1-me, types = (WORKER,WORKER))
+            if enemyWorkers:
+                rSoldierDistance = max(approxDist(rSoldiers[0].coords, enemyWorkers[0].coords),1)
+            else: 
+                enemyAnthillCoords = enemyInventory.getAnthill().coords
+                rSoldierDistance = max(approxDist(rSoldiers[0].coords, enemyAnthillCoords),2)
+        # Make sure the worker goes to get food and gets it back to the anthill (or tunnel)
+        foodDistance = 20
+        # Incentivize carrying food
+        carrying = 0
+        if worker:
+            if workers[0].carrying:
+                carrying = 1
+            constrs = neutralInventory.constrs
+            foodCoords = (0,0)
+            if carrying == 0: # Compute distance to food if not carrying
+                for construction in constrs:
+                    if construction.type == FOOD:
+                        foodCoords = construction.coords
+                        newDistance = approxDist(workers[0].coords, foodCoords)
+                        if newDistance <= foodDistance:
+                            foodDistance = max(newDistance, 1)
+                #foodDistance = max(approxDist(workers[0].coords, foodCoords),1)
+            else: # Compute distance to anthill if carrying
+                myAnthillCoords = myInventory.getAnthill().coords
+                foodDistance = max(approxDist(workers[0].coords, myAnthillCoords),1)
+        # Get the other used parameters
+        queenList = getAntList(currentState, 1-me, types = (QUEEN, QUEEN))
+        enemyQueenHealth = 0
+        if queenList:
+            enemyQueenHealth = queenList[0].health
+        ourFoodNumber = myInventory.foodCount
+        enemyAntNumber = len(enemyInventory.ants)
+        enemyFoodNumber = enemyInventory.foodCount
+        ourPoints = 5*worker + 4*rSoldier + 2*ourFoodNumber + carrying \
+            + 1/rSoldierDistance + 0.5/foodDistance
+        enemyPoints = 3*enemyFoodNumber + 2*enemyAntNumber + enemyQueenHealth
+        # This makes sure the value is always between -1 and 1
+        value = (ourPoints - enemyPoints) / (ourPoints + enemyPoints) 
+        # If the AI wins the value should be 1, otherwise it should be -1
+        if getWinner(currentState) == 1:
+            return 1
+        elif getWinner(currentState) == 0:
+            return -1
+        return value
 
     ##
     # expandNode
@@ -368,17 +263,18 @@ class AIPlayer(Player):
         if depth+1 < self.depth_limit:
             #if the next set of nodes are inside the depth limit, do bfs()
             for n in newNodes:
-                n["value"] = self.evaluateState(n["state"]) * n["minmax"]
+                n["value"] = self.evaluateState(n["state"]) #* n["minmax"]
                 if n["value"] != -1.0 and n["value"] != 1.0:
                     n["value"] = self.bfs(n, depth+1)
         else:
             #else find the values of each node
             for n in newNodes:
-                n["value"] = self.evaluateState(n["state"]) * n["minmax"]
+                n["value"] = self.evaluateState(n["state"]) #* n["minmax"]
         evaluation = self.evalListNodes(newNodes)
         if depth > 0:
             return evaluation
         else:
+            shuffle(newNodes)
             sortedNodes = sorted(newNodes, key=lambda k: k["value"])
             return sortedNodes[len(sortedNodes)-1]["move"]
 
