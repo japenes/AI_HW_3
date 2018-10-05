@@ -667,19 +667,20 @@ def getNextState(currentState, move):
                 # TODO: should this be set true? Design decision
                 ant.hasMoved = False
                 # If an ant is carrying food and ends on the anthill or tunnel drop the food
-                if ant.carrying and ant.coords == myInv.getAnthill().coords:
-                    myInv.foodCount += 1
-                    ant.carrying = False
-                for tunnels in myTunnels:
-                    if ant.carrying and (ant.coords == tunnels.coords):
-                        myInv.foodCount += 1
-                        ant.carrying = False
-                # If an ant doesn't have food and ends on the food grab food
-                if not ant.carrying and ant.type == WORKER:
-                    foods = getConstrList(myGameState, 2, [FOOD])
-                    for food in foods:
-                        if food.coords == ant.coords:
-                            ant.carrying = True
+                # THIS CODE IS NOT WHAT GAME.PY DOES
+                # if ant.carrying and ant.coords == myInv.getAnthill().coords:
+                #     myInv.foodCount += 1
+                #     ant.carrying = False
+                # for tunnels in myTunnels:
+                #     if ant.carrying and (ant.coords == tunnels.coords):
+                #         myInv.foodCount += 1
+                #         ant.carrying = False
+                # # If an ant doesn't have food and ends on the food grab food
+                # if not ant.carrying and ant.type == WORKER:
+                #     foods = getConstrList(myGameState, 2, [FOOD])
+                #     for food in foods:
+                #         if food.coords == ant.coords:
+                #             ant.carrying = True
                 # If my ant is close to an enemy ant attack it
                 attackable = listAttackable(ant.coords, UNIT_STATS[ant.type][RANGE])
                 for coord in attackable:
@@ -715,7 +716,8 @@ def getNextStateAdversarial(currentState, move):
 
     # If an ant is moved update their coordinates and has moved
     if move.moveType == MOVE_ANT:
-        startingCoord = move.coordList[0]
+        #startingCoord = move.coordList[0]
+        startingCoord = move.coordList[len(move.coordList)-1]
         for ant in myAnts:
             if ant.coords == startingCoord:
                 ant.hasMoved = True
@@ -723,6 +725,11 @@ def getNextStateAdversarial(currentState, move):
         for ant in myAnts:
             ant.hasMoved = False
         nextState.whoseTurn = 1 - currentState.whoseTurn
+    ## NEW STUFF
+    elif move.moveType == BUILD:
+        for ant in myAnts:
+            if ant.coords == myInv.getAnthill().coords:
+                ant.hasMoved = True
     return nextState
 
     

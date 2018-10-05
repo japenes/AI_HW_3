@@ -1,6 +1,6 @@
 import random
 import sys
-sys.path.append("..")  #so other modules can be found in parent dir
+sys.path.append("..")  # so other modules can be found in parent dir
 from Player import *
 from Constants import *
 from Construction import CONSTR_STATS
@@ -11,76 +11,78 @@ from AIPlayerUtils import *
 from random import shuffle
 
 ##
-#AIPlayer
-#Description: The responsbility of this class is to interact with the game by
-#deciding a valid move based on a given game state. This class has methods that
-#will be implemented by students in Dr. Nuxoll's AI course.
+# AIPlayer
+# Description: The responsbility of this class is to interact with the game by
+# deciding a valid move based on a given game state. This class has methods that
+# will be implemented by students in Dr. Nuxoll's AI course.
 #
-#Variables:
+# Variables:
 #   playerId - The id of the player.
 ##
 class AIPlayer(Player):
 
-    #__init__
-    #Description: Creates a new Player
+    # __init__
+    # Description: Creates a new Player
     #
-    #Parameters:
+    # Parameters:
     #   inputPlayerId - The id to give the new player (int)
     #   cpy           - whether the player is a copy (when playing itself)
     ##
     def __init__(self, inputPlayerId):
         super(AIPlayer,self).__init__(inputPlayerId, "ExquisiteHeuristic")
-        self.depth_limit = 2
+        self.depth_limit = 3
         self.me = 0
+        self.move = None
+        self.nextMove = None
 
     ##
-    #getPlacement
+    # getPlacement
     #
-    #Description: called during setup phase for each Construction that
+    # Description: called during setup phase for each Construction that
     #   must be placed by the player.  These items are: 1 Anthill on
     #   the player's side; 1 tunnel on player's side; 9 grass on the
     #   player's side; and 2 food on the enemy's side.
     #
-    #Parameters:
+    # Parameters:
     #   construction - the Construction to be placed.
     #   currentState - the state of the game at this point in time.
     #
-    #Return: The coordinates of where the construction is to be placed
+    # Return: The coordinates of where the construction is to be placed
     ##
     def getPlacement(self, currentState):
         numToPlace = 0
-        #implemented by students to return their next move
-        if currentState.phase == SETUP_PHASE_1:    #stuff on my side
+        # implemented by students to return their next move
+        if currentState.phase == SETUP_PHASE_1:    # stuff on my side
             numToPlace = 11
             moves = []
             for i in range(0, numToPlace):
                 move = None
                 while move == None:
-                    #Choose any x location
+                    # Choose any x location
                     x = random.randint(0, 9)
-                    #Choose any y location on your side of the board
+                    # Choose any y location on your side of the board
                     y = random.randint(0, 3)
-                    #Set the move if this space is empty
+                    # Set the move if this space is empty
                     if currentState.board[x][y].constr == None and (x, y) not in moves:
                         move = (x, y)
-                        #Just need to make the space non-empty. So I threw whatever I felt like in there.
+                        # Just need to make the space non-empty. So I threw whatever I felt like in there.
                         currentState.board[x][y].constr == True
                 moves.append(move)
             return moves
-        elif currentState.phase == SETUP_PHASE_2:   #stuff on foe's side
+        elif currentState.phase == SETUP_PHASE_2:   # stuff on foe's side
             numToPlace = 2
             moves = []
             for i in range(0, numToPlace):
                 move = None
                 while move == None:
-                    #Choose any x location
+                    # Choose any x location
                     x = random.randint(0, 9)
-                    #Choose any y location on enemy side of the board
+                    # Choose any y location on enemy side of the board
                     y = random.randint(6, 9)
-                    #Set the move if this space is empty
+                    # Set the move if this space is empty
                     if currentState.board[x][y].constr == None and (x, y) not in moves:
                         move = (x, y)
-                        #Just need to make the space non-empty. So I threw whatever I felt like in there.
+                        # Just need to make the space non-empty. So I threw whatever I felt like in there.
                         currentState.board[x][y].constr == True
                 moves.append(move)
             return moves
@@ -88,31 +90,41 @@ class AIPlayer(Player):
             return [(0, 0)]
 
     ##
-    #getMove
-    #Description: Gets the next move from the Player.
+    # getMove
+    # Description: Gets the next move from the Player.
     #
-    #Parameters:
+    # Parameters:
     #   currentState - The state of the current game waiting for the player's move (GameState)
     #
-    #Return: The Move to be made
+    # Return: The Move to be made
     ##
     def getMove(self, currentState):
         self.me = currentState.whoseTurn
-        root = {"move":None, "state":currentState, "value":0, "parent":None, "depth":0, "minmax":1}
-        move = self.bfs(root, 0)
-        return move
+        # rotate to the next move
+        self.move = self.nextMove
+        # if the list of moves is empty or move holds an enemy move, do minimax()
+        if self.move is None or self.move["minmax"] == -1:
+            root = {"move": None, "state": currentState, "value": 0, "min": -1000, "max": 1000, "parent": None, "depth": 0,
+                    "minmax": 1, "next-move": None}
+            #root has no move associated with it so automatically update self.move to minimax["next-move"]
+            self.move = self.minimax(root, 0)["next-move"]
+            self.nextMove = self.move["next-move"]
+        else:
+            # so move is not None AND move is our move
+            self.nextMove = self.move["next-move"]
+        return self.move["move"]
 
     ##
-    #getAttack
-    #Description: Gets the attack to be made from the Player
+    # getAttack
+    # Description: Gets the attack to be made from the Player
     #
-    #Parameters:
+    # Parameters:
     #   currentState - A clone of the current state (GameState)
     #   attackingAnt - The ant currently making the attack (Ant)
     #   enemyLocation - The Locations of the Enemies that can be attacked (Location[])
     ##
     def getAttack(self, currentState, attackingAnt, enemyLocations):
-        #Attack a random enemy.
+        # Attack a random enemy.
         return enemyLocations[random.randint(0, len(enemyLocations) - 1)]
 
     ##
@@ -135,26 +147,26 @@ class AIPlayer(Player):
         myInventory = currentState.inventories[me]
         enemyInventory = currentState.inventories[1-me]
         neutralInventory = currentState.inventories[2]
-        ourAnts = getAntList(currentState, me, types = (QUEEN, WORKER, DRONE, SOLDIER, R_SOLDIER))
+        ourAnts = getAntList(currentState, me, types=(QUEEN, WORKER, DRONE, SOLDIER, R_SOLDIER))
         if len(ourAnts) == 4:
             return -1
-        workers = getAntList(currentState, me, types = (WORKER, WORKER))
+        workers = getAntList(currentState, me, types=(WORKER, WORKER))
         if len(workers) == 1:
             worker = 1
         else:
             worker = 0
-        #worker = min(len(workers), 1) # One or zero, we only want one worker
-        rSoldiers = getAntList(currentState, me, types = (R_SOLDIER,R_SOLDIER))
+        # worker = min(len(workers), 1) # One or zero, we only want one worker
+        rSoldiers = getAntList(currentState, me, types=(R_SOLDIER, R_SOLDIER))
         rSoldier = min(len(rSoldiers), 1) # One or zero, we only want one ranged soldier
         # If we have an r soldier make sure it attacks a worker or goes to the opponent's anthill
         rSoldierDistance = 20
         if rSoldier:
-            enemyWorkers = getAntList(currentState, 1-me, types = (WORKER,WORKER))
+            enemyWorkers = getAntList(currentState, 1-me, types=(WORKER, WORKER))
             if enemyWorkers:
-                rSoldierDistance = max(approxDist(rSoldiers[0].coords, enemyWorkers[0].coords),1)
+                rSoldierDistance = max(approxDist(rSoldiers[0].coords, enemyWorkers[0].coords), 1)
             else: 
                 enemyAnthillCoords = enemyInventory.getAnthill().coords
-                rSoldierDistance = max(approxDist(rSoldiers[0].coords, enemyAnthillCoords),2)
+                rSoldierDistance = max(approxDist(rSoldiers[0].coords, enemyAnthillCoords), 2)
         # Make sure the worker goes to get food and gets it back to the anthill (or tunnel)
         foodDistance = 20
         # Incentivize carrying food
@@ -171,8 +183,8 @@ class AIPlayer(Player):
                         newDistance = approxDist(workers[0].coords, foodCoords)
                         if newDistance <= foodDistance:
                             foodDistance = max(newDistance, 1)
-                #foodDistance = max(approxDist(workers[0].coords, foodCoords),1)
-            else: # Compute distance to anthill if carrying
+                # foodDistance = max(approxDist(workers[0].coords, foodCoords),1)
+            else:  # Compute distance to anthill if carrying
                 myAnthillCoords = myInventory.getAnthill().coords
                 foodDistance = max(approxDist(workers[0].coords, myAnthillCoords),1)
         # Get the other used parameters
@@ -207,13 +219,16 @@ class AIPlayer(Player):
         for move in moves:
             newNode = {"move":move}
             newNode["state"] = getNextStateAdversarial(node["state"], newNode["move"])
-            newNode["value"] = 0 # this is updated in bfs
+            newNode["value"] = 0
+            newNode["min"] = node["min"]
+            newNode["max"] = node["max"]
             newNode["parent"] = node
             newNode["depth"] = node["depth"]+1
             if move.moveType == END:
                 newNode["minmax"] = -1 * node["minmax"]
             else:
                 newNode["minmax"] = node["minmax"]
+            newNode["next-move"] = None
             states.append(newNode)
         return states
 
@@ -248,38 +263,79 @@ class AIPlayer(Player):
 
 
     ##
-    # bfs
+    # minimax
     #
-    # This function preforms breadth first search
+    # This function preforms minimax search
     # It takes a node and the depth
-    # The nodes are expanded untill the depth limit is reached
-    # Then the values of the nodes are averaged and propigated up
+    # The nodes are expanded until the depth limit is reached
+    # Then the values of the nodes are averaged and propagated up
     # The move from the node with the best value at depth 0 is returned as the best move to make
     #
-    def bfs(self, node, depth):
+    def minimax(self, node, depth):
         newNodes = self.expandNode(node)
-        #it is depth + 1 since we just expanded the node and are
-        #now evaluating nodes at depth + 1
+        # it is depth + 1 since we just expanded the node and are
+        # now evaluating nodes at depth + 1
         if depth+1 < self.depth_limit:
-            #if the next set of nodes are inside the depth limit, do bfs()
+            # if the next set of nodes are inside the depth limit,
             for n in newNodes:
-                n["value"] = self.evaluateState(n["state"]) #* n["minmax"]
-                if n["value"] != -1.0 and n["value"] != 1.0:
-                    n["value"] = self.bfs(n, depth+1)
+                # update the bounds of each newNode since a previous newNode could have updated node's bounds
+                n["min"] = node["min"]
+                n["max"] = node["max"]
+                # make sure n isn't in a bad state
+                if self.evaluateState(n["state"]) != -1.0 and self.evaluateState(n["state"]) != 1.0:
+                    # minimax updates the min and max bounds of the parent node, not the children
+                    if node["minmax"] == 1:
+                        temp = node["min"]  # used so we don't do minimax() twice
+                        node["min"] = max(self.minimax(n, depth+1), node["min"])
+                        # if the bounds cross each other, prune remaining nodes
+                        if node["min"] > node["max"]:
+                            return node["min"]
+                        # if the value was updated, update the next-move value to n
+                        if temp != node["min"]:
+                            node["next-move"] = n
+                    else:
+                        temp = node["max"]
+                        node["max"] = min(self.minimax(n, depth+1), node["max"])
+                        if node["min"] > node["max"]:
+                            return node["max"]
+                        if temp != node["max"]:
+                            node["next-move"] = n
         else:
-            #else find the values of each node
+            # else find the best value for min/max
             for n in newNodes:
-                n["value"] = self.evaluateState(n["state"]) #* n["minmax"]
-        evaluation = self.evalListNodes(newNodes)
+                if node["minmax"] == 1:
+                    temp = node["min"]
+                    node["min"] = max(self.evaluateState(n["state"]), node["min"])
+                    # if the bounds cross each other, prune remaining nodes
+                    if node["min"] > node["max"]:
+                        return node["min"]
+                    # if the value was updated, update the next-move value to n
+                    if temp != node["min"]:
+                        node["next-move"] = n
+                else:
+                    temp = node["max"]
+                    node["max"] = min(self.evaluateState(n["state"]), node["max"])
+                    if node["min"] > node["max"]:
+                        return node["max"]
+                    # if the value was updated, update the next-move value to n
+                    if temp != node["max"]:
+                        node["next-move"] = n
+        # evaluation = self.evalListNodes(newNodes) NOT NEEDED, minimax() now evaluates nodes
         if depth > 0:
-            return evaluation
+            if node["minmax"] == 1:
+                return node["min"]
+            else:
+                return node["max"]
         else:
-            shuffle(newNodes)
-            sortedNodes = sorted(newNodes, key=lambda k: k["value"])
-            return sortedNodes[len(sortedNodes)-1]["move"]
+            # shuffle(newNodes)
+            # sortedNodes = sorted(newNodes, key=lambda k: k["value"])
+            # return sortedNodes[len(sortedNodes)-1]["move"]
+
+            # when we've finished minimax, return the root node with all the updated values
+            return node
 
 ################
-## UNIT TESTS ##
+#  UNIT TESTS  #
 ################
 
 
@@ -289,24 +345,24 @@ ai = AIPlayer(0)
 testState = GameState.getBasicState()
 # make it an average game state
 # add food to (3,3), (6,3), (6,6), (3,6)
-testState.inventories[NEUTRAL].constrs.append(Construction((3,3),FOOD))
-testState.inventories[NEUTRAL].constrs.append(Construction((6,3),FOOD))
-testState.inventories[NEUTRAL].constrs.append(Construction((6,6),FOOD))
-testState.inventories[NEUTRAL].constrs.append(Construction((3,6),FOOD))
+testState.inventories[NEUTRAL].constrs.append(Construction((3, 3), FOOD))
+testState.inventories[NEUTRAL].constrs.append(Construction((6, 3), FOOD))
+testState.inventories[NEUTRAL].constrs.append(Construction((6, 6), FOOD))
+testState.inventories[NEUTRAL].constrs.append(Construction((3, 6), FOOD))
 # add worker next to food (2,3)
-testState.inventories[0].ants.append(Ant((2,3), WORKER, 0))
+testState.inventories[0].ants.append(Ant((2, 3), WORKER, 0))
 # make an enemy worker on opposite side
-testState.inventories[1].ants.append(Ant((7,6), WORKER, 1))
+testState.inventories[1].ants.append(Ant((7, 6), WORKER, 1))
 # add another friendly worker to look more like AI
-testState.inventories[0].ants.append(Ant((7,3), WORKER, 0))
+testState.inventories[0].ants.append(Ant((7, 3), WORKER, 0))
 # move queen so she doesn't stand on anthill and cause evaluateList() to return -1.0
-queenMove = Move(MOVE_ANT, [(0,0), (1,0)])
+queenMove = Move(MOVE_ANT, [(0, 0), (1, 0)])
 testState = getNextState(testState, queenMove)
 
 # EVALUATE STATE TESTS
 # (1) Will worker move onto food?
 # get state with ant on food
-foodMove = Move(MOVE_ANT, [(7,3),(6,3)], None)
+foodMove = Move(MOVE_ANT, [(7, 3), (6, 3)], None)
 foodState = getNextState(testState, foodMove)
 # if moving worker onto food is considered worse than not, ERROR
 if ai.evaluateState(foodState) < ai.evaluateState(testState):
@@ -319,8 +375,9 @@ testState.inventories[1].foodCount = 2
 # use food to build Soldier
 soldierBuild = Move(BUILD, None, SOLDIER)
 buildState = getNextState(testState, soldierBuild)
-if ai.evaluateState(buildState) < ai.evaluateState(testState):
-    print("ERROR: AI will not build soldier")
+# unit test not applicable with heuristic
+# if ai.evaluateState(buildState) < ai.evaluateState(testState):
+#     print("ERROR: AI will not build soldier")
 
 # (3) Will game move non-workers towards enemy queen?
 soldierMove = Move(MOVE_ANT, [(0,0),(0,1),(0,2)])
@@ -328,11 +385,12 @@ attackState = getNextState(buildState, soldierMove)
 if ai.evaluateState(attackState) < ai.evaluateState(buildState):
     print("ERROR: AI will not attack queen")
 
-# BFS TESTS
+# minimax TESTS
 # (1) Does reaching depth limit return an integer?
-testNode = {"move":None, "state":testState, "value":0, "parent":None, "depth":3, "minmax":1}
-if not isinstance(ai.bfs(testNode, testNode["depth"]), float):
-    print("ERROR: bfs() doesn't test depth limit properly")
+testNode = {"move": None, "state": testState, "value": 0, "min": -1000, "max": 1000, "parent": None, "depth": 3,
+            "minmax": 1, "next-move": None}
+if not isinstance(ai.minimax(testNode, testNode["depth"]), float):
+    print("ERROR: minimax() doesn't test depth limit properly")
 
 # EVALLISTNODES TESTS
 # (1) Does sending an empty list cause a DivideByZeroError?
@@ -343,6 +401,7 @@ except:
 
 # EXPAND NODE TESTS
 # (1) Does expanding a node return more nodes?
-testNode = {"move":None, "state":testState, "value":0, "parent":None, "depth":0, "minmax":1}
+testNode = {"move": None, "state": testState, "value": 0, "min": -1000, "max": 1000, "parent": None, "depth": 0,
+            "minmax": 1, "next-move": None}
 if len(ai.expandNode(testNode)) == 0:
     print("ERROR: expandNode returns empty list")
