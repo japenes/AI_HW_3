@@ -23,12 +23,8 @@ from random import shuffle
 ##
 class AIPlayer(Player):
 
-    # Depth limit i means it looks at all the states that are i+1 away from the current state
-    # This means that if we set the depth limit to 1 it looks at the current state's (node's)
-    # children and grandchildren (so 2 deep)
-    @property
-    def depthLimit(self):
-        return 1    
+    
+   
 
     #__init__
     #Description: Creates a new Player
@@ -39,6 +35,11 @@ class AIPlayer(Player):
     ##
     def __init__(self, inputPlayerId):
         super(AIPlayer,self).__init__(inputPlayerId, "OffIsTheBestDef")
+        self.me = 0
+        self.depthLimit = 1
+    # Depth limit i means it looks at all the states that are i+1 away from the current state
+    # This means that if we set the depth limit to 1 it looks at the current state's (node's)
+    # children and grandchildren (so 2 deep)
 
 
     # Gives an evaluation method the evaluate the current state of the game
@@ -56,13 +57,20 @@ class AIPlayer(Player):
     # The amount of ants
     # The health points of the queen
     def getValue(self, currentState):
-        me = currentState.whoseTurn
+        me = self.me
         # Get the different inventories
         myInventory = currentState.inventories[me]
         enemyInventory = currentState.inventories[1-me]
         neutralInventory = currentState.inventories[2]
+        ourAnts = getAntList(currentState, me, types = (QUEEN, WORKER, DRONE, SOLDIER, R_SOLDIER))
+        if len(ourAnts) == 4:
+            return -1
         workers = getAntList(currentState, me, types = (WORKER, WORKER))
-        worker = min(len(workers), 1) # One or zero, we only want one worker
+        if len(workers) == 1:
+            worker = 1
+        else:
+            worker = 0
+        #worker = min(len(workers), 1) # One or zero, we only want one worker
         rSoldiers = getAntList(currentState, me, types = (R_SOLDIER,R_SOLDIER))
         rSoldier = min(len(rSoldiers), 1) # One or zero, we only want one ranged soldier
         # If we have an r soldier make sure it attacks a worker or goes to the opponent's anthill
@@ -87,7 +95,10 @@ class AIPlayer(Player):
                 for construction in constrs:
                     if construction.type == FOOD:
                         foodCoords = construction.coords
-                foodDistance = max(approxDist(workers[0].coords, foodCoords),1)
+                        newDistance = approxDist(workers[0].coords, foodCoords)
+                        if newDistance <= foodDistance:
+                            foodDistance = max(newDistance, 1)
+                #foodDistance = max(approxDist(workers[0].coords, foodCoords),1)
             else: # Compute distance to anthill if carrying
                 myAnthillCoords = myInventory.getAnthill().coords
                 foodDistance = max(approxDist(workers[0].coords, myAnthillCoords),1)
@@ -113,20 +124,36 @@ class AIPlayer(Player):
 
 
     # Evaluates a list of nodes to determine their overall evaluation score
-    def getEvaluation(self, nodeList):
-        if nodeList:
-            averageEval = sum(node['evaluation_of_state'] for node in nodeList) / len(nodeList)
-            return averageEval
+    def getEvaluation(self, nodes):
+        if nodes and len(nodes) > 1:
+            noEndNodes = []
+            for node in nodes:
+                if node['move_from_parent_node'].moveType is not END:
+                    noEndNodes.append(node)
+            randomNode = noEndNodes[0]
+            if randomNode['minmax'] == 1:
+                bestNodeValue = -1
+                for node in noEndNodes:
+                    if node['value'] >= bestNodeValue:
+                        bestNodeValue = node['value']
+            elif randomNode['minmax'] == -1:
+                bestNodeValue = 1
+                for node in noEndNodes:
+                    if node['value'] <= bestNodeValue:
+                        bestNodeValue = node['value']
+            return bestNodeValue
+        elif nodes:
+            return nodes[0]['value']
         else:
-            # If we have an empty list it should have a bad evaluation
             return -1
 
 
     # Recursive method which returns the move object of the highest evaluated node when depth = 0, 
     # otherwise it will return the evaluation of the complete set of nodes 
     def getBestMove(self, currentState, depth):
-        possibleMoves = listAllMovementMoves(currentState) 
-        possibleMoves.extend(listAllBuildMoves(currentState))
+        #possibleMoves = listAllMovementMoves(currentState) 
+        #possibleMoves.extend(listAllBuildMoves(currentState))
+        possibleMoves = listAllLegalMoves(currentState)
         nodeList = [] 
         for move in possibleMoves:
             state = getNextStateAdversarial(currentState, move)
@@ -136,8 +163,13 @@ class AIPlayer(Player):
             # Otherwise we just evaluate the current node
             else:
                 evaluation = self.getValue(state)
+            if state.whoseTurn == self.me:
+                minmax = 1
+            else:
+                minmax = -1
             node = {'move_from_parent_node': move, 'state_reached': state.fastclone(), \
-                'evaluation_of_state': evaluation, 'depth': depth+1}
+                'value': evaluation, 'depth': depth+1, \
+                'minmax': minmax}
             nodeList.append(node)
         # If we are not at depth 0, we should return the overall value of the children nodes
         if depth > 0:
@@ -147,7 +179,7 @@ class AIPlayer(Player):
         else:
             if nodeList:
                 shuffle(nodeList) # If there all multiple best moves we want to pick one at random
-                bestNode = max(nodeList, key=lambda x:x['evaluation_of_state'])
+                bestNode = max(nodeList, key=lambda x:x['value'])
                 return bestNode['move_from_parent_node']
             else:
                 return(Move(END, None, None))
@@ -163,15 +195,9 @@ class AIPlayer(Player):
     # Return: The Move to be made
     ##
     def getMove(self, currentState):
-        valueBefore = self.getValue(currentState)
+        self.me = currentState.whoseTurn
         move = self.getBestMove(currentState.fastclone(), 0)
-        valueAfter = self.getValue(getNextStateAdversarial(currentState, move))
-        # This if statement makes sure we don't make a move that is worse than the current state
-        # Otherwise it is better to just end the turn
-        if round(valueAfter,2) >= round(valueBefore,2):
-            return move
-        else:
-            return Move(END, None, None)
+        return move
 
 
     ##
@@ -290,24 +316,7 @@ if not math.isclose(value,rightValue):
         value, "instead of the value ", rightValue, ".")
 
 
-# Here we check the function that evaluates multiple nodes
-# First we create 3 nodes, it should return the average of the 'evaluation_of_state' values,
-# which is 0 in this case
-node1 = {'move_from_parent_node': [(0,0), (0,1), (1,1)], 'state_reached': basicState, \
-    'evaluation_of_state': 0.7, 'depth': 1}
-node2 = {'move_from_parent_node': [(0,0), (0,1)], 'state_reached': basicState, \
-    'evaluation_of_state': -0.1, 'depth': 1}
-node3 = {'move_from_parent_node': [(0,0), (0,1)], 'state_reached': basicState, \
-    'evaluation_of_state': -0.6, 'depth': 1}
-nodeList = []
-nodeList.append(node1)
-nodeList.append(node2)
-nodeList.append(node3)
-rightValue = 0 # Average value of the 3 nodes
-value = AIplayer.getEvaluation(nodeList)
-if not math.isclose(value,rightValue):
-    print("Error, the evaluation function gives the value ", value, \
-        "instead of the value ", rightValue, ".")
+
 
 # Finally we check our rerucsive method, which is called getBestMove
 # We look at a specific case in which there is only one move that is clearly the best
