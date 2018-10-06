@@ -14,7 +14,7 @@ from random import shuffle
 # AIPlayer
 # Description: The responsbility of this class is to interact with the game by
 # deciding a valid move based on a given game state. This class has methods that
-# will be implemented by students in Dr. Nuxoll's AI course.
+# will be implemented by students in Dr. Nuxoll's AI course. 
 #
 # Variables:
 #   playerId - The id of the player.
@@ -173,11 +173,15 @@ class AIPlayer(Player):
         if rSoldier:
             enemyWorkers = getAntList(currentState, 1-me, types=(WORKER, WORKER))
             if enemyWorkers:
-                rSoldierDistance = max(approxDist(rSoldiers[0].coords, enemyWorkers[0].coords), 1)
+                rSoldierDistance = approxDist(rSoldiers[0].coords, enemyWorkers[0].coords)
             else: 
-                enemyAnthillCoords = enemyInventory.getAnthill().coords
-                # enemyQueenCoords = getAntList(currentState, 1-me, types=(QUEEN,))[0].coords
-                rSoldierDistance = max(approxDist(rSoldiers[0].coords, enemyAnthillCoords), 2)
+                queen = getAntList(currentState, 1-me, types=(QUEEN,))
+                if len(queen) == 1:
+                    enemyQueenCoords = queen[0].coords
+                    rSoldierDistance = abs(approxDist(rSoldiers[0].coords, enemyQueenCoords)-3)
+                else:
+                    enemyAnthillCoords = enemyInventory.getAnthill().coords
+                    rSoldierDistance = abs(approxDist(rSoldiers[0].coords, enemyAnthillCoords)-3)
         # Make sure the worker goes to get food and gets it back to the anthill (or tunnel)
         foodDistance = 20
         # Incentivize carrying food
@@ -193,11 +197,11 @@ class AIPlayer(Player):
                         foodCoords = construction.coords
                         newDistance = approxDist(workers[0].coords, foodCoords)
                         if newDistance <= foodDistance:
-                            foodDistance = max(newDistance, 1)
+                            foodDistance = newDistance
                 # foodDistance = max(approxDist(workers[0].coords, foodCoords),1)
             else:  # Compute distance to tunnel if carrying
                 myTunnelCoords = myInventory.getTunnels()[0].coords
-                foodDistance = max(approxDist(workers[0].coords, myTunnelCoords),1)
+                foodDistance = approxDist(workers[0].coords, myTunnelCoords)
         # Get the other used parameters
         queenList = getAntList(currentState, 1-me, types = (QUEEN, QUEEN))
         enemyQueenHealth = 0
@@ -207,7 +211,7 @@ class AIPlayer(Player):
         enemyAntNumber = len(enemyInventory.ants)
         enemyFoodNumber = enemyInventory.foodCount
         ourPoints = 5*worker + 4*rSoldier + 2*ourFoodNumber + carrying \
-            + 1/rSoldierDistance + 0.5/foodDistance
+            + 1/(rSoldierDistance+1) + 0.5/(foodDistance+1)
         enemyPoints = 3*enemyFoodNumber + 2*enemyAntNumber + enemyQueenHealth
         # This makes sure the value is always between -1 and 1
         value = (ourPoints - enemyPoints) / (ourPoints + enemyPoints) 
@@ -251,19 +255,15 @@ class AIPlayer(Player):
     #
     def evalListNodes(self, nodes):
         if nodes and len(nodes) > 1:
-            noEndNodes = []
-            for node in nodes:
-                if node["move"].moveType is not END:
-                    noEndNodes.append(node)
-            randomNode = noEndNodes[0]
+            randomNode = nodes[0]
             if randomNode["minmax"] == 1:
                 bestNodeValue = -1
-                for node in noEndNodes:
+                for node in nodes:
                     if node["value"] >= bestNodeValue:
                         bestNodeValue = node["value"]
             elif randomNode["minmax"] == -1:
                 bestNodeValue = 1
-                for node in noEndNodes:
+                for node in nodes:
                     if node["value"] <= bestNodeValue:
                         bestNodeValue = node["value"]
             return bestNodeValue
@@ -284,6 +284,7 @@ class AIPlayer(Player):
     #
     def minimax(self, node, depth):
         newNodes = self.expandNode(node)
+        shuffle(newNodes)
         # create counter
         counter = 0
         # it is depth + 1 since we just expanded the node and are
@@ -296,28 +297,26 @@ class AIPlayer(Player):
                 # update the bounds of each newNode since a previous newNode could have updated node's bounds
                 n["min"] = node["min"]
                 n["max"] = node["max"]
-                # make sure n isn't in a bad state
-                if self.evaluateState(n["state"]) != -1.0 and self.evaluateState(n["state"]) != 1.0:
-                    # minimax updates the min and max bounds of the parent node, not the children
-                    if node["minmax"] == 1:
-                        temp = node["min"]  # used so we don't do minimax() twice
-                        node["min"] = max(self.minimax(n, depth+1), node["min"])
-                        # if the bounds cross each other, prune remaining nodes
-                        if node["min"] > node["max"]:
-                            # updated global variable
-                            self.prunedMoves += len(newNodes) - counter
-                            return node["min"]
-                        # if the value was updated, update the next-move value to n
-                        if temp != node["min"]:
-                            node["next-move"] = n
-                    else:
-                        temp = node["max"]
-                        node["max"] = min(self.minimax(n, depth+1), node["max"])
-                        if node["min"] > node["max"]:
-                            self.prunedMoves += len(newNodes) - counter
-                            return node["max"]
-                        if temp != node["max"]:
-                            node["next-move"] = n
+                # minimax updates the min and max bounds of the parent node, not the children
+                if node["minmax"] == 1:
+                    temp = node["min"]  # used so we don't do minimax() twice
+                    node["min"] = max(self.minimax(n, depth+1), node["min"])
+                    # if the bounds cross each other, prune remaining nodes
+                    if node["min"] > node["max"]:
+                        # updated global variable
+                        self.prunedMoves += len(newNodes) - counter
+                        return node["min"]
+                    # if the value was updated, update the next-move value to n
+                    if temp != node["min"]:
+                        node["next-move"] = n
+                else:
+                    temp = node["max"]
+                    node["max"] = min(self.minimax(n, depth+1), node["max"])
+                    if node["min"] > node["max"]:
+                        self.prunedMoves += len(newNodes) - counter
+                        return node["max"]
+                    if temp != node["max"]:
+                        node["next-move"] = n
         else:
             # else find the best value for min/max
             for n in newNodes:
