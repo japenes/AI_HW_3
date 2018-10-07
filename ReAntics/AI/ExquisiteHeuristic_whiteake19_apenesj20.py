@@ -144,6 +144,8 @@ class AIPlayer(Player):
     # however we need to reset global variables
     #
     def registerWin(self, hasWon):
+        self.move = None
+        self.nextMove = None 
         pass
 
     ##
@@ -153,11 +155,19 @@ class AIPlayer(Player):
     #
     def evaluateState(self, currentState):
         me = self.me
+        if getWinner(currentState) == 1:
+            return 1
+        elif getWinner(currentState) == 0:
+            return -1
         # Get the different inventories
         myInventory = currentState.inventories[me]
         enemyInventory = currentState.inventories[1-me]
         neutralInventory = currentState.inventories[2]
         ourAnts = getAntList(currentState, me, types=(QUEEN, WORKER, DRONE, SOLDIER, R_SOLDIER))
+        ourQueen = getAntList(currentState, me, types=(QUEEN,))
+        if len(ourQueen) == 1:
+            ourAnthillCoords = myInventory.getAnthill().coords
+            queenAroundAnthill = max(approxDist(ourQueen[0].coords, ourAnthillCoords),2)
         if len(ourAnts) == 4:
             return -1
         workers = getAntList(currentState, me, types=(WORKER, WORKER))
@@ -180,8 +190,9 @@ class AIPlayer(Player):
                     enemyQueenCoords = queen[0].coords
                     rSoldierDistance = abs(approxDist(rSoldiers[0].coords, enemyQueenCoords)-3)
                 else:
-                    enemyAnthillCoords = enemyInventory.getAnthill().coords
-                    rSoldierDistance = abs(approxDist(rSoldiers[0].coords, enemyAnthillCoords)-3)
+                    return 1
+                    #enemyAnthillCoords = enemyInventory.getAnthill().coords
+                    #rSoldierDistance = abs(approxDist(rSoldiers[0].coords, enemyAnthillCoords)-3)
         # Make sure the worker goes to get food and gets it back to the anthill (or tunnel)
         foodDistance = 20
         # Incentivize carrying food
@@ -211,15 +222,11 @@ class AIPlayer(Player):
         enemyAntNumber = len(enemyInventory.ants)
         enemyFoodNumber = enemyInventory.foodCount
         ourPoints = 5*worker + 4*rSoldier + 2*ourFoodNumber + carrying \
-            + 1/(rSoldierDistance+1) + 0.5/(foodDistance+1)
+            + 1/(rSoldierDistance+1) + 0.5/(foodDistance+1) + 0.25/(queenAroundAnthill)
         enemyPoints = 3*enemyFoodNumber + 2*enemyAntNumber + enemyQueenHealth
         # This makes sure the value is always between -1 and 1
         value = (ourPoints - enemyPoints) / (ourPoints + enemyPoints) 
         # If the AI wins the value should be 1, otherwise it should be -1
-        if getWinner(currentState) == 1:
-            return 1
-        elif getWinner(currentState) == 0:
-            return -1
         return value
 
     ##
@@ -298,25 +305,31 @@ class AIPlayer(Player):
                 n["min"] = node["min"]
                 n["max"] = node["max"]
                 # minimax updates the min and max bounds of the parent node, not the children
-                if node["minmax"] == 1:
+                if node["minmax"] == 1:                   
                     temp = node["min"]  # used so we don't do minimax() twice
                     node["min"] = max(self.minimax(n, depth+1), node["min"])
-                    # if the bounds cross each other, prune remaining nodes
-                    if node["min"] > node["max"]:
-                        # updated global variable
-                        self.prunedMoves += len(newNodes) - counter
-                        return node["min"]
                     # if the value was updated, update the next-move value to n
                     if temp != node["min"]:
                         node["next-move"] = n
+                        # if the bounds cross each other, prune remaining nodes
+                    if node["min"] > node["max"] or node["min"] == 1:
+                        # updated global variable
+                        self.prunedMoves += len(newNodes) - counter
+                        if depth == 0:
+                            return node
+                        else: 
+                            return node["min"]
                 else:
                     temp = node["max"]
                     node["max"] = min(self.minimax(n, depth+1), node["max"])
-                    if node["min"] > node["max"]:
-                        self.prunedMoves += len(newNodes) - counter
-                        return node["max"]
                     if temp != node["max"]:
                         node["next-move"] = n
+                    if node["min"] > node["max"]:
+                        self.prunedMoves += len(newNodes) - counter
+                        if depth == 0:
+                            return node
+                        else:
+                            return node["max"]
         else:
             # else find the best value for min/max
             for n in newNodes:
@@ -332,6 +345,8 @@ class AIPlayer(Player):
                     # if the value was updated, update the next-move value to n
                     if temp != node["min"]:
                         node["next-move"] = n
+                    if node["min"] == 1:
+                        return node["min"]
                 else:
                     temp = node["max"]
                     node["max"] = min(self.evaluateState(n["state"]), node["max"])
